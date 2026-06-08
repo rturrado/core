@@ -53,18 +53,23 @@ protected:
   void TearDown() override { qir::Runtime::getInstance().resetOstream(); }
 #endif
 
+  qdmi_test::SessionGuard sessionGuard;
+  qdmi_test::JobGuard jobGuard{sessionGuard.session};
+
   using Histogram = std::pair<std::vector<std::string>, std::vector<size_t>>;
   static constexpr size_t NUM_SHOTS = 1024;
   static constexpr size_t NUM_QUBITS = 3;
 
-  static Histogram runProgram(const QDMI_Program_Format format,
-                              const std::string_view program) {
-    const qdmi_test::SessionGuard s{};
-    const qdmi_test::JobGuard j{s.session};
-    EXPECT_EQ(qdmi_test::setProgram(j.job, format, program), QDMI_SUCCESS);
-    EXPECT_EQ(qdmi_test::setShots(j.job, NUM_SHOTS), QDMI_SUCCESS);
-    EXPECT_EQ(qdmi_test::submitAndWait(j.job, 0), QDMI_SUCCESS);
-    return qdmi_test::getHistogram(j.job);
+  void runProgram(const QDMI_Program_Format format,
+                  const std::string_view program) const {
+    EXPECT_EQ(qdmi_test::setProgram(jobGuard.job, format, program),
+              QDMI_SUCCESS);
+    EXPECT_EQ(qdmi_test::setShots(jobGuard.job, NUM_SHOTS), QDMI_SUCCESS);
+    EXPECT_EQ(qdmi_test::submitAndWait(jobGuard.job, 0), QDMI_SUCCESS);
+  }
+
+  Histogram getHistogram() const {
+    return qdmi_test::getHistogram(jobGuard.job);
   }
 
   static void checkHistogram(const Histogram& hist) {
@@ -142,50 +147,57 @@ protected:
 TEST_F(HistogramTest, QASM3Program) {
   constexpr QDMI_Program_Format format = QDMI_PROGRAM_FORMAT_QASM3;
   constexpr std::string_view program = qdmi_test::QASM3_BELL_SAMPLING;
-  checkHistogram(runProgram(format, program));
+  runProgram(format, program);
+  checkHistogram(getHistogram());
 }
 
 #ifdef BUILD_MQT_CORE_QDMI_WITH_QIR
 TEST_F(QIRHistogramTestModule, BaseStatic) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRBASEMODULE;
-  checkHistogram(runProgram(format, getProgram("BellPairStatic.ll")));
+  runProgram(format, getProgram("BellPairStatic.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestString, BaseStatic) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRBASESTRING;
-  checkHistogram(runProgram(format, getProgram("BellPairStatic.ll")));
+  runProgram(format, getProgram("BellPairStatic.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestModule, BaseDynamic) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRBASEMODULE;
-  checkHistogram(runProgram(format, getProgram("BellPairDynamic.ll")));
+  runProgram(format, getProgram("BellPairDynamic.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestString, BaseDynamic) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRBASESTRING;
-  checkHistogram(runProgram(format, getProgram("BellPairDynamic.ll")));
+  runProgram(format, getProgram("BellPairDynamic.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestModule, Adaptive) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRADAPTIVEMODULE;
-  checkHistogram(runProgram(format, getProgram("BellPairAdaptive.ll")));
+  runProgram(format, getProgram("BellPairAdaptive.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestString, Adaptive) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRADAPTIVESTRING;
-  checkHistogram(runProgram(format, getProgram("BellPairAdaptive.ll")));
+  runProgram(format, getProgram("BellPairAdaptive.ll"));
+  checkHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestModule, AdaptiveRecordOutputs) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRADAPTIVEMODULE;
-  checkSmokeHistogram(
-      runProgram(format, getProgram("AdaptiveRecordOutputs.ll")));
+  runProgram(format, getProgram("AdaptiveRecordOutputs.ll"));
+  checkSmokeHistogram(getHistogram());
 }
 
 TEST_F(QIRHistogramTestString, AdaptiveRecordOutputs) {
   constexpr auto format = QDMI_PROGRAM_FORMAT_QIRADAPTIVESTRING;
-  checkSmokeHistogram(
-      runProgram(format, getProgram("AdaptiveRecordOutputs.ll")));
+  runProgram(format, getProgram("AdaptiveRecordOutputs.ll"));
+  checkSmokeHistogram(getHistogram());
 }
 #endif
 
