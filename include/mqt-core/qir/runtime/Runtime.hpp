@@ -30,6 +30,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -206,7 +207,7 @@ private:
   std::vector<qc::Qubit> qubitPermutation;
   static constexpr uintptr_t MIN_DYN_RESULT_ADDRESS = 0x10000;
   std::unordered_map<Result*, ResultStruct> rRegister;
-  std::string recordedOutputs;
+  std::string recordedBitResults;
   uintptr_t currentMaxQubitAddress;
   qc::Qubit currentMaxQubitId;
   uintptr_t currentMaxResultAddress;
@@ -362,15 +363,19 @@ public:
   auto rFree(Result* result) -> void;
   auto equal(Result* result1, Result* result2) -> bool;
 
-  /// Append the value referenced by `result` to the recorded outputs bit
-  /// string in record order.
-  auto recordOutput(Result* result) -> void;
+  /// Append the bit `result` to the recorded results bit string.
+  auto recordBitResult(bool result) -> void;
 
-  /// Return the outputs declared by the program as a bit string in record
-  /// order.
-  auto getRecordedOutputs() const -> const std::string&;
+  /// Return the recorded results bit string.
+  auto getRecordedBitResults() const -> const std::string&;
 
-  auto getOstream() -> std::ostream&;
+  /// Emit `label:\n` to the output stream.
+  auto outputContainer(const char* label, int64_t elementCount) const -> void;
+
+  /// Emit `label: valueStr\n` to the output stream.
+  auto outputValue(const char* label, std::string_view valueStr) const -> void;
+
+  auto getOstream() const -> std::ostream&;
   auto setOstream(std::ostream& other) -> void;
   auto resetOstream() -> void;
 };

@@ -456,7 +456,7 @@ auto MQT_DDSIM_QDMI_Device_Job_impl_d::submitQIRProgram() -> QDMI_STATUS {
               llvm::formatv("QIR program failed with error: {}", rc));
         }
         // Update the measurement counts.
-        ++counts_[runtime.getRecordedOutputs()];
+        ++counts_[runtime.getRecordedBitResults()];
       }
       status_.store(QDMI_JOB_STATUS_DONE);
     } catch (const std::exception& e) {
