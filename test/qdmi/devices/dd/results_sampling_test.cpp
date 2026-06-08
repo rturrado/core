@@ -68,7 +68,7 @@ protected:
     EXPECT_EQ(qdmi_test::submitAndWait(jobGuard.job, 0), QDMI_SUCCESS);
   }
 
-  Histogram getHistogram() const {
+  [[nodiscard]] Histogram getHistogram() const {
     return qdmi_test::getHistogram(jobGuard.job);
   }
 
