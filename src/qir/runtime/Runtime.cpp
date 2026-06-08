@@ -61,7 +61,7 @@ auto Runtime::reset() -> void {
   mt.seed(generateRandomSeed());
   qRegister.clear();
   rRegister.clear();
-  recordedBitResults.clear();
+  recordedResults.clear();
   // NOLINTBEGIN(performance-no-int-to-ptr)
   rRegister.emplace(reinterpret_cast<Result*>(RESULT_ZERO_ADDRESS),
                     ResultStruct{.refcount = 0, .r = false});
@@ -169,28 +169,74 @@ auto Runtime::equal(Result* result1, Result* result2) -> bool {
   return deref(result1).r == deref(result2).r;
 }
 
-auto Runtime::recordBitResult(bool result) -> void {
-  recordedBitResults.push_back(result ? '1' : '0');
-}
-
-auto Runtime::getRecordedBitResults() const -> const std::string& {
-  return recordedBitResults;
-}
-
-auto Runtime::outputContainer(const char* label,
-                              int64_t /* elementCount */) const -> void {
-  *os << (label != nullptr ? label : "") << ":\n";
-}
-
-auto Runtime::outputValue(const char* label, std::string_view valueStr) const
-    -> void {
-  *os << (label != nullptr ? label : "") << ": " << valueStr << "\n";
-}
-
 auto Runtime::getOstream() const -> std::ostream& { return *os; }
 
 auto Runtime::setOstream(std::ostream& other) -> void { os = &other; }
 
 auto Runtime::resetOstream() -> void { os = &std::cout; }
+
+auto Runtime::getRecordedResults() const -> const std::string& {
+  return recordedResults;
+}
+
+void Runtime::emitOutputRecord(const char* type, std::string_view value,
+                               const char* label) const {
+  *os << "OUTPUT\t" << type << "\t" << value;
+  if (label != nullptr && labelingSchema == LabelingSchema::Labeled) {
+    *os << "\t" << label;
+  }
+  *os << "\n";
+}
+
+auto Runtime::recordResult(Result* result, const char* label) -> void {
+  // Update the recorded results bit string.
+  const auto* const bit = deref(result).r ? "1" : "0";
+  recordedResults.append(bit);
+
+  emitOutputRecord("RESULT", bit, label);
+}
+
+auto Runtime::recordBool(bool value, const char* label) const -> void {
+  emitOutputRecord("BOOL", value ? "true" : "false", label);
+}
+
+auto Runtime::recordInt(int64_t value, const char* label) const -> void {
+  emitOutputRecord("INT", std::to_string(value), label);
+}
+
+auto Runtime::recordFloat(double value, const char* label) const -> void {
+  std::ostringstream oss;
+  oss << value;
+  emitOutputRecord("DOUBLE", oss.str(), label);
+}
+
+auto Runtime::recordTuple(int64_t elementCount, const char* label) const
+    -> void {
+  emitOutputRecord("TUPLE", std::to_string(elementCount), label);
+}
+
+auto Runtime::recordArray(int64_t elementCount, const char* label) const
+    -> void {
+  emitOutputRecord("ARRAY", std::to_string(elementCount), label);
+}
+
+auto Runtime::recordProgramHeader() const -> void {
+  const auto* schemaName =
+      labelingSchema == LabelingSchema::Labeled ? "labeled" : "ordered";
+  *os << "HEADER\tschema_id\t" << schemaName << "\n";
+  *os << "HEADER\tschema_version\t2.1\n";
+}
+
+auto Runtime::recordShotStart() const -> void { *os << "START\n"; }
+
+auto Runtime::recordShotEnd() const -> void { *os << "END\t0\n"; }
+
+auto Runtime::getLabelingSchema() const -> LabelingSchema {
+  return labelingSchema;
+}
+
+auto Runtime::setLabelingSchema(LabelingSchema schema) -> void {
+  labelingSchema = schema;
+}
 
 } // namespace qir

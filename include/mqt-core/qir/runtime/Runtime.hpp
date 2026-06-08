@@ -197,6 +197,8 @@ public:
   static constexpr uintptr_t RESULT_ZERO_ADDRESS = 0x10000;
   static constexpr uintptr_t RESULT_ONE_ADDRESS = 0x10001;
 
+  enum class LabelingSchema : uint8_t { Labeled, Ordered };
+
 private:
   static constexpr uintptr_t MIN_DYN_QUBIT_ADDRESS = 0x10000;
   enum class AddressMode : uint8_t { UNKNOWN, DYNAMIC, STATIC };
@@ -207,7 +209,7 @@ private:
   std::vector<qc::Qubit> qubitPermutation;
   static constexpr uintptr_t MIN_DYN_RESULT_ADDRESS = 0x10000;
   std::unordered_map<Result*, ResultStruct> rRegister;
-  std::string recordedBitResults;
+  std::string recordedResults;
   uintptr_t currentMaxQubitAddress;
   qc::Qubit currentMaxQubitId;
   uintptr_t currentMaxResultAddress;
@@ -216,6 +218,7 @@ private:
   dd::vEdge qState;
   std::mt19937_64 mt;
   std::ostream* os = &std::cout;
+  LabelingSchema labelingSchema = LabelingSchema::Labeled;
 
   Runtime();
   explicit Runtime(uint64_t randomSeed);
@@ -260,6 +263,12 @@ private:
     const auto targets = qc::Targets(addresses.data(), addresses.data() + t);
     return {targets, Op, paramVec};
   }
+
+  // Emit an OUTPUT record honoring the active labeling schema.
+  // The label is included only in Labeled mode (Ordered mode drops it per
+  // spec). Tab separator between fields, newline at end.
+  void emitOutputRecord(const char* type, std::string_view value,
+                        const char* label) const;
 
 public:
   [[nodiscard]] static auto generateRandomSeed() -> uint64_t;
@@ -363,21 +372,46 @@ public:
   auto rFree(Result* result) -> void;
   auto equal(Result* result1, Result* result2) -> bool;
 
-  /// Append the bit `result` to the recorded results bit string.
-  auto recordBitResult(bool result) -> void;
-
-  /// Return the recorded results bit string.
-  auto getRecordedBitResults() const -> const std::string&;
-
-  /// Emit `label:\n` to the output stream.
-  auto outputContainer(const char* label, int64_t elementCount) const -> void;
-
-  /// Emit `label: valueStr\n` to the output stream.
-  auto outputValue(const char* label, std::string_view valueStr) const -> void;
-
   auto getOstream() const -> std::ostream&;
   auto setOstream(std::ostream& other) -> void;
   auto resetOstream() -> void;
+
+  /// Return the recorded results bit string.
+  [[nodiscard]] auto getRecordedResults() const -> const std::string&;
+
+  /// Push the result bit into the recorded results bit string.
+  /// Emit `OUTPUT\tRESULT\t<0|1>[\tlabel]\n` to the output stream.
+  auto recordResult(Result* result, const char* label) -> void;
+
+  /// Emit `OUTPUT\tBOOL\t<true|false>[\tlabel]\n` to the output stream.
+  auto recordBool(bool value, const char* label) const -> void;
+
+  /// Emit `OUTPUT\tINT\t<value>[\tlabel]\n` to the output stream.
+  auto recordInt(int64_t value, const char* label) const -> void;
+
+  /// Emit `OUTPUT\tDOUBLE\t<value>[\tlabel]\n` to the output stream.
+  auto recordFloat(double value, const char* label) const -> void;
+
+  /// Emit `OUTPUT\tTUPLE\t<elementCount>[\tlabel]\n` to the output stream.
+  auto recordTuple(int64_t elementCount, const char* label) const -> void;
+
+  /// Emit `OUTPUT\tARRAY\t<elementCount>[\tlabel]\n` to the output stream.
+  auto recordArray(int64_t elementCount, const char* label) const -> void;
+
+  /// Emit the HEADER records (once per submitted program):
+  /// `HEADER\tschema_id\t<labeled|ordered>`
+  /// `HEADER\tschema_version\t2.1`
+  auto recordProgramHeader() const -> void;
+
+  /// Emit `START\n` (one per shot).
+  auto recordShotStart() const -> void;
+
+  /// Emit `END\t0\n` (one per shot). The trailing `0` is a spec literal,
+  /// not a runtime exit code.
+  auto recordShotEnd() const -> void;
+
+  [[nodiscard]] auto getLabelingSchema() const -> LabelingSchema;
+  auto setLabelingSchema(LabelingSchema schema) -> void;
 };
 
 } // namespace qir
