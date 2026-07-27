@@ -232,3 +232,35 @@ INSTANTIATE_TEST_SUITE_P(DynamicAndStatic, WireIteratorTest, ::testing::Bool(),
                          [](const ::testing::TestParamInfo<bool>& info) {
                            return info.param ? "Dynamic" : "Static";
                          });
+
+//
+// Default-constructed sentinel iterator.
+//
+// A default-constructed `WireIterator` represents an unused wire slot in the
+// mapping pass (a hardware qubit with no program placed on it). It must compare
+// equal to `std::default_sentinel` from the start and stay that way through
+// forward and backward operations, so `walkProgramGraph` naturally skips it and
+// any incidental advance on it in the routing code stays a no-op.
+
+TEST(WireIteratorSentinelTest, DefaultConstructedIsSentinel) {
+  const qco::WireIterator it;
+  EXPECT_EQ(it, std::default_sentinel);
+  EXPECT_EQ(it.operation(), nullptr);
+  EXPECT_EQ(it.qubit(), nullptr);
+}
+
+TEST(WireIteratorSentinelTest, ForwardOnFreshSentinelIsNoOp) {
+  qco::WireIterator it;
+  ++it;
+  EXPECT_EQ(it, std::default_sentinel);
+  EXPECT_EQ(it.operation(), nullptr);
+  EXPECT_EQ(it.qubit(), nullptr);
+}
+
+TEST(WireIteratorSentinelTest, BackwardOnFreshSentinelIsNoOp) {
+  qco::WireIterator it;
+  --it;
+  EXPECT_EQ(it, std::default_sentinel);
+  EXPECT_EQ(it.operation(), nullptr);
+  EXPECT_EQ(it.qubit(), nullptr);
+}

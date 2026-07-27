@@ -204,6 +204,17 @@ static Device getNineQubitSquareGrid() {
                           {5, 8}, {8, 5}, {6, 7}, {7, 6}, {7, 8}, {8, 7}}};
 }
 
+/// Return a 5-qubit path coupling set: 0 -- 1 -- 2 -- 3 -- 4.
+/// The linear topology plus a low number of program qubits means most trial
+/// layouts force the router to move programs through unplaced hardware slots.
+static Device getFiveQubitPath() {
+  return {
+      .nqubits = 5,
+      .couplingSet =
+          {{0, 1}, {1, 0}, {1, 2}, {2, 1}, {2, 3}, {3, 2}, {3, 4}, {4, 3}},
+  };
+}
+
 /// Creates an N-qubit GHZ state, where N = `qubits.size()` using
 /// straight-line programming.
 static void flatGHZ(QCOProgramBuilder& builder, SmallVector<Value>& qubits) {
@@ -1122,3 +1133,69 @@ TEST_P(MappingPassTest, MapDoUntil) {
 
 INSTANTIATE_TEST_SUITE_P(NineQubitSquareGrid, MappingPassTest,
                          testing::Values(getNineQubitSquareGrid()));
+
+/// Test that the mapping pass produces executable IR on a device with:
+/// - more hardware qubits than program qubits and
+/// - a coupling graph sparse enough so that routing moves programs through
+///   unplaced hardware slots.
+///
+/// This specifically exercises the "true injection" code paths: `Layout::swap`
+/// mutating the layout across an empty side, `walkProgramGraph` encountering a
+/// default-constructed (sentinel) wire and stepping over it, and
+/// `insertSWAPs<Hot>` writing an IR `qco.swap` op whose second operand is the
+/// SSA of a hardware qubit that entered the region unplaced.
+TEST(MappingPassInjectionTest, RoutesThroughUnplacedHardware) {
+  DialectRegistry registry;
+  registry.insert<QCODialect, scf::SCFDialect, arith::ArithDialect,
+                  func::FuncDialect>();
+  constexpr int64_t nProg = 3;
+  MLIRContext context;
+  context.appendDialectRegistry(registry);
+  context.loadAllAvailableDialects();
+  QCOProgramBuilder builder(&context);
+  builder.initialize(SmallVector<Type>(nProg, builder.getI1Type()));
+
+  // Tensor alloc
+  Value tensor = builder.qtensorAlloc(nProg);
+
+  // Tensor extract
+  SmallVector<Value> qubits(nProg);
+  for (int64_t i = 0; i < nProg; ++i) {
+    std::tie(tensor, qubits[i]) = builder.qtensorExtract(tensor, i);
+  }
+
+  // All three pairs interact so that no placement can satisfy every gate
+  // without at least one SWAP; on the 5-qubit path graph, several SWAPs
+  // typically cross unplaced hardware slots.
+  std::tie(qubits[0], qubits[1]) = builder.cx(qubits[0], qubits[1]);
+  std::tie(qubits[0], qubits[2]) = builder.cx(qubits[0], qubits[2]);
+  std::tie(qubits[1], qubits[2]) = builder.cx(qubits[1], qubits[2]);
+
+  // Barrier
+  qubits = builder.barrier(qubits);
+
+  // Measure
+  SmallVector<Value> bits(nProg);
+  for (int64_t i = 0; i < nProg; ++i) {
+    std::tie(qubits[i], bits[i]) = builder.measure(qubits[i]);
+  }
+
+  // Tensor insert
+  for (int64_t i = 0; i < nProg; ++i) {
+    tensor = builder.qtensorInsert(qubits[i], tensor, i);
+  }
+
+  // Tensor dealloc
+  builder.qtensorDealloc(tensor);
+
+  auto m = builder.finalize(bits);
+
+  const auto device = getFiveQubitPath();
+  PassManager pm(&context);
+  pm.addPass(createMappingPass(device.couplingSet, MappingPassOptions{}));
+  const auto res = pm.run(m.get());
+  const auto entryPoint = getEntryPoint(m.get());
+
+  ASSERT_TRUE(res.succeeded());
+  EXPECT_TRUE(isExecutable(entryPoint, device.couplingSet));
+}

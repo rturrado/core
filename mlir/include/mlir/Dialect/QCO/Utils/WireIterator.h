@@ -33,8 +33,10 @@ public:
   using difference_type = std::ptrdiff_t;
   using value_type = Operation*;
 
+  /// Default-constructed iterators are sentinels: they represent an unused
+  /// wire slot and terminate iteration immediately in either direction.
   WireIterator()
-      : op_(nullptr), qubit_(nullptr), isFinal_(false), isSentinel_(false) {}
+      : op_(nullptr), qubit_(nullptr), isFinal_(false), isSentinel_(true) {}
   explicit WireIterator(Value qubit)
       : op_(qubit.getDefiningOp()), qubit_(qubit), isFinal_(false),
         isSentinel_(false) {}

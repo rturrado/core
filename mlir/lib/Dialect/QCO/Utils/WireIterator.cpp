@@ -97,8 +97,14 @@ void WireIterator::forward() {
 }
 
 void WireIterator::backward() {
-  // If the iterator is a sentinel, reactivate the iterator.
   if (isSentinel_) {
+    // If the iterator is a "fresh" sentinel (default-constructed, never walked
+    // forward), it has no prior op to return to; leave it alone so a backward
+    // walk over it stays a no-op.
+    if (op_ == nullptr) {
+      return;
+    }
+    // Otherwise, reactivate the iterator.
     isSentinel_ = false;
     isFinal_ = true;
     return;
